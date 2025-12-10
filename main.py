@@ -21,8 +21,8 @@ class SignalAnalyzerApp:
         self.processing_app = "./data_processing"
         
         # Размеры
-        self.main_window_size = "1600x1200"
-        self.figure_sizes = [(14, 3), (14, 3)]
+        self.main_window_size = "1600x1000"
+        self.figure_sizes = [(10, 3), (14, 3)]
         self.frame_padding = {"padx": 10, "pady": 8}
         
         # Параметры демо-режима (QPSK)
@@ -31,8 +31,8 @@ class SignalAnalyzerApp:
             "n": 10,        # Num info bits
             "vel": 10.0,    # Info velocity (bits/sec)
             "snr": 10.0,    # SNR
-            "poly1": 13,    # Gold seq poly 1
-            "poly2": 17     # Gold seq poly 2
+            "poly1": 37,    # Gold seq poly 1
+            "poly2": 61     # Gold seq poly 2
         }
         
         # Параметры исследования BER
@@ -349,7 +349,7 @@ class SignalAnalyzerApp:
             elif key in ["corr1", "corr2", "corr3", "corr4"]:
                 corr = self.parse_real_txt_file(path)
                 if corr is None: return False
-                if not hasattr(self, 'correlations'):
+                if self.correlations is None:
                     self.correlations = []
                 self.correlations.append(corr)
             elif key == "in_bits":
@@ -477,7 +477,11 @@ class SignalAnalyzerApp:
 
     def on_closing(self):
         if messagebox.askokcancel("Выход", "Завершить работу?"):
-            self.root.destroy()
+            self.root.quit()  # This stops the mainloop
+            self.root.destroy()  # This destroys the window
+            # Exit the Python process
+            import sys
+            sys.exit(0)
 
 def main():
     root = tk.Tk()

@@ -2,8 +2,8 @@
 #include "Correlator.h"
 #include <fstream>
 #include <string>
-
-constexpr double PI_2 = 6.28318530718;
+#include <type_traits>
+#include <algorithm>
 
 namespace Utils
 {
@@ -25,10 +25,24 @@ void write(std::vector<T> data, std::string name)
     if (!outFile.is_open())
         throw std::runtime_error("Cannot open file: " + name);
 
-    for (uint32_t i = 0; i < data.size() - 1; ++i)
-       outFile << data[i] << ", ";
-
-    outFile << data[data.size() - 1] << std::endl;
+    if constexpr (std::is_same_v<T, std::complex<double>>)
+    {
+        for (uint32_t i = 0; i < data.size() - 1; ++i)
+            outFile << data[i].real() << ", " << data[i].imag() << ", ";
+        outFile << data[data.size() - 1].real() << ", " << data[data.size() - 1].imag() << " " << std::endl;
+    }
+    else if constexpr (std::is_same_v<T, uint8_t>)
+    {
+        for (uint32_t i = 0; i < data.size() - 1; ++i)
+            outFile << (uint32_t)data[i] << ", ";
+        outFile << (uint32_t)data[data.size() - 1];
+    }
+    else
+    {
+        for (uint32_t i = 0; i < data.size() - 1; ++i)
+            outFile << data[i] << ", ";
+        outFile << data[data.size() - 1] << std::endl;
+    }
 
     outFile.close();
 }
@@ -72,96 +86,6 @@ void RandomGenerator::generateAwgn(std::vector<std::complex<double>>& data_out, 
     return;
 }
 
-// Function for generating shifted in TD signal
-//! [in]  sample_freq      - Sample frequency of the signal
-//! [in]  d_t              - Time offset in sec
-//! [in]  shifted_size     - Size of shifted signal
-//! [in]  data_in          - Input data samples
-//! [out] data_out         - Output shifted signal
-void SignalGenerator::generateShiftedSignal(double sample_freq, double d_t, uint32_t shifted_size,
-                                            const std::vector<std::complex<double>>& data_in,
-                                                  std::vector<std::complex<double>>& data_out)
-{
-    if (sample_freq <= 0)
-        throw std::runtime_error("Error in SignalGenerator::generateShiftedSignal."
-                                 " Invalid sample_freq: " + std::to_string(sample_freq));
-    if (d_t < 0)
-        throw std::runtime_error("Error in SignalGenerator::generateShiftedSignal."
-                                 " Invalid d_t: " + std::to_string(d_t));
-
-    uint32_t size = data_in.size();
-
-    if (size < shifted_size)
-        throw std::runtime_error("Error in SignalGenerator::generateShiftedSignal."
-                                 " Invalid shifted_size: " + std::to_string(shifted_size) +
-                                 std::string("while size of data_in: ") + std::to_string(size));
-
-    // Calculating n_shift  
-    uint32_t n_shift = d_t;// * sample_freq;
-
-    std::cout << "n_shift: " << n_shift << std::endl;
-
-    if (n_shift + shifted_size > size)
-        throw std::runtime_error("Error in SignalGenerator::generateShiftedSignal." +
-                                 std::string(" Invalid n_shift: ") + std::to_string(n_shift) +
-                                 std::string(", n_shift is size / fd / d_t, where size: ") +
-                                 std::to_string(size) + std::string(", fd: ") + std::to_string(sample_freq) +
-                                 std::string(", d_t: ") + std::to_string(d_t));
-
-    if (data_out.empty())
-        data_out.resize(shifted_size);
-
-    auto iter_data_in = data_in.begin() + n_shift;
-
-    std::copy(iter_data_in, iter_data_in + shifted_size, data_out.begin());
-
-    return;
-}
-
-// Function for generating shifted in TD signal
-double SignalGenerator::generateShiftedSignal(double sample_freq, uint32_t shifted_size,
-                             const std::vector<std::complex<double>>& data_in,
-                             double seed,
-                             std::vector<std::complex<double>>& data_out)
-{
-    double dt = 0;
-
-    if (sample_freq <= 0)
-        throw std::runtime_error("Error in SignalGenerator::generateShiftedSignal."
-                                 " Invalid sample_freq: " + std::to_string(sample_freq));
-
-    uint32_t size = data_in.size();
-
-    if (size < shifted_size)
-        throw std::runtime_error("Error in SignalGenerator::generateShiftedSignal."
-                                 " Invalid shifted_size: " + std::to_string(shifted_size) +
-                                 std::string("while size of data_in: ") + std::to_string(size));
-
-    dt = (size - shifted_size) * seed;
-
-    // Calculating n_shift  
-    uint32_t n_shift = dt;// * sample_freq;
-
-    std::cout << "n_shift: " << n_shift << std::endl;
-
-    if (n_shift + shifted_size > size)
-        throw std::runtime_error("Error in SignalGenerator::generateShiftedSignal." +
-                                 std::string(" Invalid n_shift: ") + std::to_string(n_shift) +
-                                 std::string(", n_shift is size / fd / d_t, where size: ") +
-                                 std::to_string(size) + std::string(", fd: ") + std::to_string(sample_freq) +
-                                 std::string(", d_t: ") + std::to_string(dt));
-
-    if (data_out.empty())
-        data_out.resize(shifted_size);
-
-    auto iter_data_in = data_in.begin() + n_shift;
-
-    std::copy(iter_data_in, iter_data_in + shifted_size, data_out.begin());
-
-    return dt;
-}
-
-
 // Add noise in data
 //! [in/out] data     - Input/Output data
 //! [in]     snr      - Signal to Noise Ratio
@@ -195,17 +119,13 @@ void NoiseInjector::addNoise(std::vector<std::complex<double>>& data, double snr
 
 //! Configurate signal generator
 //! [in] params - Configuration parameters
-void BaseGenerator::configure(const cfg& params)
+//! [in] seq    - Gold Sequence
+void BaseGenerator::configure(const cfg& params, const GoldSeq& seq)
 {
     if (params.fd <= 0.)
         throw std::runtime_error("Error in BaseGenerator::configure function." + 
                                  std::string(" Invalid parameters fd: ") +
                                  std::to_string(params.fd));
-
-    if (params.f <= 0.)
-        throw std::runtime_error("Error in BaseGenerator::configure function." + 
-                                 std::string(" Invalid parameters f: ") +
-                                 std::to_string(params.f));
 
     if (params.n == 0)
         throw std::runtime_error("Error in BaseGenerator::configure function." + 
@@ -216,59 +136,30 @@ void BaseGenerator::configure(const cfg& params)
         throw std::runtime_error("Error in BaseGenerator::configure function." + 
                                  std::string(" Invalid parameters infoVel: ") +
                                  std::to_string(params.vel));
-
-    // Koef for normal trasmission (F_info / f << 1)
-    double koeff = 1. / params.vel / params.f;
-    std::cout << "config. koeff: " << koeff << std::endl;
-
-    if (koeff >= 0.1)
-        throw std::runtime_error("Error in BaseGenerator::configure function." + 
-                                 std::string(" Invalid parameters infoVel. F_info / f_carrier =  ") +
-                                 std::to_string(koeff) + std::string(", (koeff << 1)"));
-    if (params.f * 2 > params.fd)
-        throw std::runtime_error("Error in BaseGenerator::configure function." + 
-                                 std::string(" Invalid parameters fd and f. fd >= 2 * f"));
  
     m_NumBits = params.n;
-    m_Type    = params.type;
     
-    // T = 1 / fd
-    // t = numBits * infoVel
-    // Num samples = t / T
-    m_NumSampl = params.n * params.vel * params.fd;
-    std::cout << "config. numSamples: " << m_NumSampl << std::endl;
-
     // Num samples / numBits
-    m_SamplPerBit = params.vel  * params.fd;
-    std::cout << "config. Samples per bit: " << m_SamplPerBit << std::endl;
+    m_SamplPerBit = params.vel  *  params.fd;
 
-    // T = 1 / fd
-    // phase = ph0 + f * t, where t = n * T
-    m_DPhase = params.f / params.fd;
-    std::cout << "config. d Phase: " << m_DPhase << std::endl;
-
-    // d_f = Fd / 2, whete Fd - Info freq
-    double fMin = 1. / 2. / params.vel;
-    std::cout << "d_f: " << fMin << std::endl;
-
-    // m_DPhaseFreqMod = {(params.f + fMin) / params.fd, (params.f - fMin) / params.fd};
-    m_DPhaseFreqMod = {(params.f * (1 + 0.5)) / params.fd, (params.f * (1 - 0.5)) / params.fd};
+    // Get Gold size
+    m_goldSeq = seq;
 
     return;
-};
+}
 
 // Generate data signal
 //! [out] bits     - Generated input bits
 //! [out] data_out - Generated sample data
-void BaseGenerator::generate(std::vector<uint8_t>& bits, std::vector<std::complex<double>>& data_out);
+void BaseGenerator::generate(std::vector<uint8_t>& bits, std::vector<std::complex<double>>& data_out)
 {
     // Generate random bits
     m_Gen.generateBits(bits, m_NumBits);
 
     // Code bits with Gold Seq
-    auto codeBits = genCodeBits(bits);
+    std::vector<uint8_t> codeBits = generateCodeBits(bits);
 
-    data_out.resize(codeBits.size() * m_numSamplesPerBit);
+    data_out.resize(codeBits.size() * m_SamplPerBit);
 
     // Generate IQ
     generateIQ(codeBits, data_out);
@@ -307,7 +198,7 @@ void BaseGenerator::generateIQ(const std::vector<uint8_t>& bits, std::vector<std
         I = (*cur_bit ? 1 : -1);
         Q = (*(cur_bit + 1) ? 1 : -1);
 
-        data_out[i] = I + Q;
+        data_out[i] = {I, Q};
 
         // We need to change bit val
         if (!(i % m_SamplPerBit) && (i != 0))
@@ -326,47 +217,51 @@ std::vector<uint8_t> BaseGenerator::generateCodeBits(const std::vector<uint8_t>&
     uint32_t size     = bits.size();
     uint32_t goldSize = m_goldSeq.symb1.size();
 
-    std::vector<uint8_t> res(size * goldSize);
-    auto resIterator = res.begin();
+    std::vector<uint8_t> res(size * goldSize / 2);
+    uint32_t resIterator = 0;
 
     for (uint32_t i = 0; i < size; i += 2)
     {
-        if (bits[i] == 0 && bits[i + 1] == 0)          // 00
-            res.insert(resIterator, m_goldSeq.symb1.begin(), m_goldSeq.symb1.end());
-        else if (bits[i] == 0 && bits[i + 1] == 1)     // 01
-            res.insert(resIterator, m_goldSeq.symb2.begin(), m_goldSeq.symb2.end());
-        else if (bits[i] == 1 && bits[i + 1] == 0)     // 10
-            res.insert(resIterator, m_goldSeq.symb3.begin(), m_goldSeq.symb3.end());
-        else                                           // 11
-            res.insert(resIterator, m_goldSeq.symb4.begin(), m_goldSeq.symb4.end());
+        const std::vector<uint8_t>* symbol = nullptr;
 
+        if (bits[i] == 0 && bits[i + 1] == 0)
+        {
+            symbol = &m_goldSeq.symb1;
+        }
+        else if (bits[i] == 0 && bits[i + 1] == 1)
+        {
+            symbol = &m_goldSeq.symb2;
+        }
+        else if (bits[i] == 1 && bits[i + 1] == 0)
+        {
+            symbol = &m_goldSeq.symb3;
+        }
+        else {
+            symbol = &m_goldSeq.symb4;
+        }
+
+        std::copy(symbol->begin(), symbol->end(), res.begin() + resIterator);
         resIterator += goldSize;
     }
 
     return res;
 }
 
-
-// Get number of samples per bit
-uint32_t BaseGenerator::getNumSamplesPerBit()
-{
-    return m_SamplPerBit;
-}
-
 // Configure Data Processor
 void DataProcessor::config(const cfg& params)
 {
     m_Cfg = params;
-    m_GenData.configure(params);
 
-    if (params.type == SignalType::amplitude)
-        fileName = "../data/ber_am.txt";
-    else if (params.type == SignalType::phase)
-        fileName = "../data/ber_pm.txt";
-    else if (params.type == SignalType::freq)
-        fileName = "../data/ber_fm.txt";
-    else
-        throw std::runtime_error("Error in DataProcessor::config! Signal type is ndf!");
+    std::mt19937 generator(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+    std::uniform_int_distribution<uint32_t> distribution(1, 0xFFFFFFFF);
+    static const uint32_t s_RegSize = 5;
+    GoldGenerator gen(s_RegSize, distribution(generator), distribution(generator), params.poly1, params.poly2);     
+
+    auto goldCode = gen.getSequence();
+
+    m_GenData.configure(params, goldCode);
+
+    fileName = "../data/ber_qpsk.txt";
 
     return;
 }
@@ -375,36 +270,33 @@ void DataProcessor::config(const cfg& params)
 void DataProcessor::run(uint32_t num_runs)
 {
     size_t counter = 0;
+    double persent = 0;
     Correlator corr;
 
     // Temp data for processing
-    std::vector<std::complex<double>> firstSignal;
-    std::vector<std::complex<double>> secondSignal;
-    std::vector<double>               correlation;
-    double   shifted_size_per    = 0.3; // 30 %
-    uint32_t max_metric_id       = 0;
-    uint32_t shifted_signal_size = 0;
-    double persent = 0;
+    std::vector<std::complex<double>> signalIQ;
+    std::vector<uint8_t>              bits;
+    std::vector<uint8_t>              outBits;
+    std::vector<std::vector<double>>  correlation(4);
+    std::vector<std::vector<std::complex<double>>> impulceResponce;
 
-    double dt = 0;
+    // Generate impulse responce
+    m_GenData.generateInpulseResp(impulceResponce);
+
 
     // Processing steps
     for (uint32_t i = 0; i < num_runs; ++i)
     {
-        // Generate large part
-        m_GenData.generate(firstSignal);
+        // Generate signal
+        m_GenData.generate(bits, signalIQ);
 
-        shifted_signal_size = shifted_size_per * firstSignal.size();
+        // Add noise
+        m_Noise.addNoise(signalIQ, m_Cfg.snr);
 
-        // Generate min part
-        dt = SignalGenerator::generateShiftedSignal(m_Cfg.fd, shifted_signal_size, firstSignal, m_UniGen.generate(), secondSignal);
+        // Correlate
+        outBits = corr.correlate(impulceResponce, signalIQ, correlation);
 
-        m_Noise.addNoise(firstSignal,  m_Cfg.snr1);
-        m_Noise.addNoise(secondSignal, m_Cfg.snr2);
-
-        corr.correlate(firstSignal, secondSignal, correlation, max_metric_id);
-
-        if (std::abs(max_metric_id - dt) < m_GenData.getNumSamplesPerBit())
+        if (std::equal(bits.begin(), bits.end(), outBits.begin()))
             counter++;
     }
 
@@ -421,18 +313,20 @@ void DataProcessor::run()
     std::vector<std::complex<double>> signalIQ;
     std::vector<uint8_t>              bits;
     std::vector<std::vector<double>>  correlation(4);
-    std::vector<std::vector<double>>  impulceResponce(4);
+    std::vector<std::vector<std::complex<double>>> impulceResponce;
 
     // Generate signal
     m_GenData.generate(bits, signalIQ);
+
+    // Generate impulse responce
+    m_GenData.generateInpulseResp(impulceResponce);
 
     // Add noise
     m_Noise.addNoise(signalIQ, m_Cfg.snr);
 
     // Generate Impulse Responce
-
     Correlator corr;
-    auto outBits = corr.correlate(goldSeq, singalIQ, correlation);
+    auto outBits = corr.correlate(impulceResponce, signalIQ, correlation);
     
     Utils::write(bits, std::string("../data/in_bits.txt"));
     Utils::write(outBits, std::string("../data/out_bits.txt"));
@@ -451,8 +345,8 @@ void DataProcessor::run()
 //! Get seq
 std::vector<uint8_t> MSeqGenerator::getSequence()
 {
-    // Size: max Size: 2^n - 1. We need (size % 2 == 0)
-    std::vector<uint8_t> res((1U << m_N) - 2);
+    // Size: max Size: 2^n - 1
+    std::vector<uint8_t> res((1U << m_N) - 1);
 
     for (auto& item : res)
         item = getNext();
@@ -463,24 +357,25 @@ std::vector<uint8_t> MSeqGenerator::getSequence()
 //! Get next bit
 uint8_t MSeqGenerator::getNext()
 {
-    uint8_t res = m_Seed & 1U;
-
-    uint32_t feedBack = 0;
-    uint32_t regResponce = m_Seed & m_Poly;
-
-    // Get XOR of all responce
-    while (regResponce)
-    {
-        feedBack ^= (regResponce & 1U);
-        regResponce >>= 1;
+   uint8_t res = m_Seed & 1U;
+    
+    // More efficient feedback calculation using popcount
+    uint32_t feedbackBits = m_Seed & m_Poly;
+    
+    // Count set bits (parity)
+    uint32_t feedback = 0;
+    while (feedbackBits) {
+        feedback ^= 1;
+        feedbackBits &= feedbackBits - 1;  // Clear lowest set bit
     }
-
-    // Reg shift
+    
+    // Shift register
     m_Seed >>= 1;
-
-    // New val
-    if (feedBack)
+    
+    // Insert feedback at MSB position
+    if (feedback) {
         m_Seed |= (1U << (m_N - 1));
+    }
 
     return res;
 }
@@ -492,29 +387,59 @@ GoldSeq GoldGenerator::getSequence()
 {
     GoldSeq res;
 
-    // Gen 2 Gold Seq
+    // Generate base M-sequences
     auto m1 = m_Gen1->getSequence();
     auto m2 = m_Gen2->getSequence();
 
     res.symb1 = xorVec(m1, m2);
-    shiftVec(m2);
-    res.symb2 = xorVec(m1, m2);
-    shiftVec(m2);
-    res.symb3 = xorVec(m1, m2);
-    shiftVec(m2);
-    res.symb4 = xorVec(m1, m2);
+    
+    auto m2_shift1 = m2;
+    shiftVec(m2_shift1, 1);
+    res.symb2 = xorVec(m1, m2_shift1);
+    
+    auto m2_shift2 = m2;
+    shiftVec(m2_shift2, 2);
+    res.symb3 = xorVec(m1, m2_shift2);
+    
+    auto m2_shift3 = m2;
+    shiftVec(m2_shift3, 3);
+    res.symb4 = xorVec(m1, m2_shift3);
+
+    res.symb1.erase(res.symb1.end() - 1);
+    res.symb2.erase(res.symb2.end() - 1);
+    res.symb3.erase(res.symb3.end() - 1);
+    res.symb4.erase(res.symb4.end() - 1);
+
+    std::cout << "seq 1: " << std::endl;
+    for (auto it : res.symb1)
+        std::cout << (uint32_t)it << ", ";
+    std::cout << std::endl;
+
+    std::cout << "seq 2: " << std::endl;
+    for (auto it : res.symb2)
+        std::cout << (uint32_t)it << ", ";
+    std::cout << std::endl;
+
+    std::cout << "seq 3: " << std::endl;
+    for (auto it : res.symb3)
+        std::cout << (uint32_t)it << ", ";
+    std::cout << std::endl;
+
+    std::cout << "seq 4: " << std::endl;
+    for (auto it : res.symb4)
+        std::cout << (uint32_t)it << ", ";
+    std::cout << std::endl;
+
 
     return res;
 }
 
 //! Shift Vector function
-void GoldGenerator::shiftVec(std::vector<uint8_t>& vec)
+void GoldGenerator::shiftVec(std::vector<uint8_t>& vec, uint32_t shift)
 {
-    auto frontEl = vec.front();
+    shift %= vec.size();
 
-    vec.erase(vec.begin());
-
-    vec.push_back(frontEl);
+    std::rotate(vec.begin(), vec.begin() + shift, vec.end());
 
     return;
 }
