@@ -2,7 +2,7 @@
     "cmake.buildDirectory": "${workspaceFolder}/build",
     "cmake.buildBeforeRun": true,
     "cmake.configureOnOpen": true,
-    "cmake.sourceDirectory": "/home/alex/uni/data_processing/correlation_method/cpp",
+    "cmake.sourceDirectory": "/home/alex/uni/data_processing/chorrelation_method_gold_codes/cpp",
     "files.associations": {
         "cctype": "cpp",
         "clocale": "cpp",
