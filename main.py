@@ -27,7 +27,7 @@ class SignalAnalyzerApp:
         
         # Параметры демо-режима (QPSK)
         self.demo_params = {
-            "fd": 20.0,     # Sample freq
+            "fd": 1100.0,     # Sample freq
             "n": 10,        # Num info bits
             "vel": 10.0,    # Info velocity (bits/sec)
             "snr": 10.0,    # SNR
@@ -37,15 +37,15 @@ class SignalAnalyzerApp:
         
         # Параметры исследования BER
         self.research_params = {
-            "fd": 20.0,
-            "n": 100,
+            "fd": 1100.0,
+            "n": 10,
             "vel": 10.0,
             "snr_min": 0.0,
             "snr_max": 20.0,
             "n_points": 10,
             "n_runs": 100,
-            "poly1": 13,
-            "poly2": 17
+            "poly1": 37,
+            "poly2": 61
         }
         
         self.root.geometry(self.main_window_size)
@@ -417,6 +417,16 @@ class SignalAnalyzerApp:
         self.research_canvas.draw()
 
     def demo_processing_thread(self):
+        self.signal_iq = None
+        self.correlations = []  # Используйте список, а не None
+        self.in_bits = None
+        self.out_bits = None
+
+        # ОЧИСТКА ГРАФИКОВ
+        self.demo_ax1.clear()
+        self.demo_ax2.clear()
+        self.demo_canvas1.draw()
+        self.demo_canvas2.draw()
         try:
             self.demo_start_btn.config(state=tk.DISABLED)
             params = self.get_demo_parameters()

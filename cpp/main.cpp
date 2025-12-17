@@ -26,7 +26,7 @@ void parceCfgResearch(cfg& cfg, uint32_t& numRuns, char* argv[])
     cfg.snr    = std::stod(argv[4]);
     cfg.poly1  = std::stoi(argv[5]);
     cfg.poly2  = std::stoi(argv[6]);
-    numRuns    = std::stoi(argv[5]);
+    numRuns    = std::stoi(argv[7]);
 }
 
 // Функция для запуска обработки в потоке

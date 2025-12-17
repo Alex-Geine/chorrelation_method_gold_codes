@@ -155,7 +155,7 @@ class BaseGenerator
     RandomGenerator m_Gen = {};    //! Random generator to create random bits
 
     uint32_t m_NumBits     = 0;               //! Number of info bits
-    uint32_t m_SamplPerBit = 0;               //! Number samples per bit
+    uint32_t m_SamplPerSymb = 0;               //! Number samples per bit
     GoldSeq  m_goldSeq     = {};              //! Gold Sequce
 
     public: //! fucntions

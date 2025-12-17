@@ -91,28 +91,40 @@ void RandomGenerator::generateAwgn(std::vector<std::complex<double>>& data_out, 
 //! [in]     snr      - Signal to Noise Ratio
 void NoiseInjector::addNoise(std::vector<std::complex<double>>& data, double snr)
 {
-    double energy = 0;
+    double energySignal = 0;
+    double energyNoise  = 0;
 
     for (auto& it: data)
-        energy += std::abs(it * std::conj(it));
+        energySignal += std::norm(it);
 
     // snr = log(energy / noise)
     // 10^snr = enegry / noise
     // noise = energy / 10^snr
-    double lin_snr = std::pow(10, snr);
-    double noise_power = energy / lin_snr;
+    double lin_snr = std::pow(10, snr / 10.);
+    double noise_power = 1. / std::sqrt(2.);
 
-    // need to process mean energy
-    // Very big questions
-    gen.config(std::sqrt(noise_power / 2.));
+    gen.config(noise_power);
 
     uint32_t size = data.size();
 
     std::vector<std::complex<double>> noise;
     gen.generateAwgn(noise, size);
 
+    for (auto& it: noise)
+        energyNoise += std::norm(it);
+
+    double alfa = std::sqrt(energySignal / energyNoise / lin_snr);
+    
     for (uint32_t i = 0; i < size; ++i)
-        data[i] += noise[i];
+        data[i] += alfa * noise[i];
+
+    energyNoise = 0;
+    for (auto& it: noise)
+        energyNoise += std::norm(it * alfa);
+
+    std::cout << "SNR[dB]: " << snr << "real SNR[dB]: " << 10. * log10(energySignal / energyNoise) << std::endl;
+
+    // Utils::writeBer(10. * log10(energySignal / energyNoise), "real_snr.txt");
 
     return;
 }
@@ -136,11 +148,11 @@ void BaseGenerator::configure(const cfg& params, const GoldSeq& seq)
         throw std::runtime_error("Error in BaseGenerator::configure function." + 
                                  std::string(" Invalid parameters infoVel: ") +
                                  std::to_string(params.vel));
- 
+
     m_NumBits = params.n;
-    
+
     // Num samples / numBits
-    m_SamplPerBit = params.vel  *  params.fd;
+    m_SamplPerSymb = 1. / params.vel  *  params.fd;
 
     // Get Gold size
     m_goldSeq = seq;
@@ -159,10 +171,13 @@ void BaseGenerator::generate(std::vector<uint8_t>& bits, std::vector<std::comple
     // Code bits with Gold Seq
     std::vector<uint8_t> codeBits = generateCodeBits(bits);
 
-    data_out.resize(codeBits.size() * m_SamplPerBit);
+    data_out.resize(codeBits.size() * m_SamplPerSymb / 2);
 
     // Generate IQ
     generateIQ(codeBits, data_out);
+
+    std::cout << "codeBits size: " << codeBits.size() << std::endl;
+    std::cout << "dataOut size: " << data_out.size() << std::endl;
 
     return;
 }
@@ -170,7 +185,9 @@ void BaseGenerator::generate(std::vector<uint8_t>& bits, std::vector<std::comple
 // Generate Inpulse Responce
 void BaseGenerator::generateInpulseResp(std::vector<std::vector<std::complex<double>>>& impulse_res)
 {
-    impulse_res.resize(4, std::vector<std::complex<double>>(m_SamplPerBit * m_goldSeq.symb1.size()));
+    impulse_res.resize(4, std::vector<std::complex<double>>(m_SamplPerSymb * m_goldSeq.symb1.size() / 2));
+
+    std::cout << "impulse responce: " << m_SamplPerSymb * m_goldSeq.symb1.size() / 2 << std::endl;
 
     generateIQ(m_goldSeq.symb1, impulse_res[0]);
     generateIQ(m_goldSeq.symb2, impulse_res[1]);
@@ -201,7 +218,7 @@ void BaseGenerator::generateIQ(const std::vector<uint8_t>& bits, std::vector<std
         data_out[i] = {I, Q};
 
         // We need to change bit val
-        if (!(i % m_SamplPerBit) && (i != 0))
+        if (!(i % m_SamplPerSymb) && (i != 0))
             cur_bit += incrementBits;
     }
 
@@ -244,6 +261,8 @@ std::vector<uint8_t> BaseGenerator::generateCodeBits(const std::vector<uint8_t>&
         resIterator += goldSize;
     }
 
+    std::cout << "res.size(): " << res.size() << std::endl;
+
     return res;
 }
 
@@ -251,6 +270,11 @@ std::vector<uint8_t> BaseGenerator::generateCodeBits(const std::vector<uint8_t>&
 void DataProcessor::config(const cfg& params)
 {
     m_Cfg = params;
+
+
+    Utils::writeBer(params.poly1, "poly1.txt");
+    Utils::writeBer(params.poly2, "poly2.txt");
+    
 
     std::mt19937 generator(std::chrono::high_resolution_clock::now().time_since_epoch().count());
     std::uniform_int_distribution<uint32_t> distribution(1, 0xFFFFFFFF);
@@ -280,9 +304,11 @@ void DataProcessor::run(uint32_t num_runs)
     std::vector<std::vector<double>>  correlation(4);
     std::vector<std::vector<std::complex<double>>> impulceResponce;
 
+
+    Utils::writeBer(num_runs, "num_runs.txt");
+
     // Generate impulse responce
     m_GenData.generateInpulseResp(impulceResponce);
-
 
     // Processing steps
     for (uint32_t i = 0; i < num_runs; ++i)
@@ -299,6 +325,9 @@ void DataProcessor::run(uint32_t num_runs)
         if (std::equal(bits.begin(), bits.end(), outBits.begin()))
             counter++;
     }
+
+    Utils::writeBer(counter, "counter.txt");
+
 
     persent = (double)counter / (double)num_runs;
 
@@ -318,13 +347,18 @@ void DataProcessor::run()
     // Generate signal
     m_GenData.generate(bits, signalIQ);
 
+    std::cout << "bits: " << std::endl;
+    for (auto it : bits)
+        std::cout << (uint32_t)it << ", ";
+    std::cout << std::endl;
+
     // Generate impulse responce
     m_GenData.generateInpulseResp(impulceResponce);
 
     // Add noise
     m_Noise.addNoise(signalIQ, m_Cfg.snr);
 
-    // Generate Impulse Responce
+    // Correlate data
     Correlator corr;
     auto outBits = corr.correlate(impulceResponce, signalIQ, correlation);
     

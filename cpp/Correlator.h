@@ -11,8 +11,6 @@
 class Correlator
 {
 private: // variables
-    std::vector<std::complex<double>> a_centered;
-    std::vector<std::complex<double>> b_centered;
     std::vector<std::complex<double>> a_fft;
     std::vector<std::complex<double>> b_fft;
     std::vector<std::complex<double>> corr_fft;
