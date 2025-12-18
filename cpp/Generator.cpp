@@ -276,10 +276,16 @@ void DataProcessor::config(const cfg& params)
     Utils::writeBer(params.poly2, "poly2.txt");
     
 
+
     std::mt19937 generator(std::chrono::high_resolution_clock::now().time_since_epoch().count());
-    std::uniform_int_distribution<uint32_t> distribution(1, 0xFFFFFFFF);
+    std::uniform_int_distribution<uint32_t> distribution(1, 0xFF);
     static const uint32_t s_RegSize = 5;
-    GoldGenerator gen(s_RegSize, distribution(generator), distribution(generator), params.poly1, params.poly2);     
+
+    auto seed1 = 9;//distribution(generator);
+    auto seed2 = 236;//distribution(generator);
+    Utils::writeBer(seed1, "seed1.txt");
+    Utils::writeBer(seed2, "seed2.txt");
+    GoldGenerator gen(s_RegSize, seed1, seed2, params.poly1, params.poly2);     
 
     auto goldCode = gen.getSequence();
 
@@ -294,6 +300,7 @@ void DataProcessor::config(const cfg& params)
 void DataProcessor::run(uint32_t num_runs)
 {
     size_t counter = 0;
+    size_t numSymb = 0;
     double persent = 0;
     Correlator corr;
 
@@ -322,14 +329,17 @@ void DataProcessor::run(uint32_t num_runs)
         // Correlate
         outBits = corr.correlate(impulceResponce, signalIQ, correlation);
 
-        if (std::equal(bits.begin(), bits.end(), outBits.begin()))
-            counter++;
+        for (uint32_t i = 0; i < bits.size(); i += 2)
+            if (outBits[i] == bits[i] && outBits[i + 1] == bits[i + 1])
+                counter++;
+
+        numSymb += bits.size() / 2;
     }
 
     Utils::writeBer(counter, "counter.txt");
 
 
-    persent = (double)counter / (double)num_runs;
+    persent = (double)counter / (double)numSymb;
 
     Utils::writeBer(persent, fileName);
 
@@ -444,24 +454,34 @@ GoldSeq GoldGenerator::getSequence()
     res.symb3.erase(res.symb3.end() - 1);
     res.symb4.erase(res.symb4.end() - 1);
 
+    Utils::writeBer(777, "seq1.txt");
+    
     std::cout << "seq 1: " << std::endl;
     for (auto it : res.symb1)
-        std::cout << (uint32_t)it << ", ";
+        Utils::writeBer(it, "seq1.txt");
+    // std::cout << (uint32_t)it << ", ";
     std::cout << std::endl;
+    Utils::writeBer(777, "seq2.txt");
 
     std::cout << "seq 2: " << std::endl;
     for (auto it : res.symb2)
-        std::cout << (uint32_t)it << ", ";
+        Utils::writeBer(it, "seq2.txt");
+        // std::cout << (uint32_t)it << ", ";
     std::cout << std::endl;
+    Utils::writeBer(777, "seq3.txt");
 
     std::cout << "seq 3: " << std::endl;
     for (auto it : res.symb3)
-        std::cout << (uint32_t)it << ", ";
+        Utils::writeBer(it, "seq3.txt");
+
+    // std::cout << (uint32_t)it << ", ";
     std::cout << std::endl;
+    Utils::writeBer(777, "seq4.txt");
 
     std::cout << "seq 4: " << std::endl;
     for (auto it : res.symb4)
-        std::cout << (uint32_t)it << ", ";
+        Utils::writeBer(it, "seq4.txt");
+        // std::cout << (uint32_t)it << ", ";
     std::cout << std::endl;
 
 
