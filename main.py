@@ -408,9 +408,9 @@ class SignalAnalyzerApp:
     def show_research_plot(self, ber_data, snr_values):
         self.research_ax.clear()
         self.research_ax.semilogy(snr_values, ber_data, 'bo-', linewidth=2, markersize=6)
-        self.research_ax.set_title('BER для QPSK модуляции', fontsize=14)
+        self.research_ax.set_title('SER (Symbol Error Ratio) для QPSK модуляции', fontsize=14)
         self.research_ax.set_xlabel('SNR (дБ)')
-        self.research_ax.set_ylabel('Bit Error Rate (BER)')
+        self.research_ax.set_ylabel('Symbol Error Ratio (SER)')
         self.research_ax.grid(True, which='both', alpha=0.5)
         self.research_ax.set_yscale('log')
         self.research_fig.tight_layout()

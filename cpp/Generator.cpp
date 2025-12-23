@@ -152,7 +152,18 @@ void BaseGenerator::configure(const cfg& params, const GoldSeq& seq)
     m_NumBits = params.n;
 
     // Num samples / numBits
-    m_SamplPerSymb = 1. / params.vel  *  params.fd;
+    m_SamplPerSymb = 2. / params.vel  *  params.fd;
+
+    if (m_SamplPerSymb <= 0.)
+        throw std::runtime_error("Error in BaseGenerator::configure function." + 
+                                 std::string(" Invalid parameters m_SamplPerSymb: ") +
+                                 std::to_string(m_SamplPerSymb));
+
+
+    Utils::writeBer(params.n, "n.txt");
+    Utils::writeBer(params.vel, "vel.txt");
+    Utils::writeBer(params.fd, "fd.txt");
+    
 
     // Get Gold size
     m_goldSeq = seq;
@@ -339,7 +350,7 @@ void DataProcessor::run(uint32_t num_runs)
     Utils::writeBer(counter, "counter.txt");
 
 
-    persent = (double)counter / (double)numSymb;
+    persent = 1. - ((double)counter / (double)numSymb);
 
     Utils::writeBer(persent, fileName);
 
@@ -458,30 +469,30 @@ GoldSeq GoldGenerator::getSequence()
     
     std::cout << "seq 1: " << std::endl;
     for (auto it : res.symb1)
-        Utils::writeBer(it, "seq1.txt");
-    // std::cout << (uint32_t)it << ", ";
+        // Utils::writeBer(it, "seq1.txt");
+    std::cout << (uint32_t)it << ", ";
     std::cout << std::endl;
     Utils::writeBer(777, "seq2.txt");
 
     std::cout << "seq 2: " << std::endl;
     for (auto it : res.symb2)
-        Utils::writeBer(it, "seq2.txt");
-        // std::cout << (uint32_t)it << ", ";
+        // Utils::writeBer(it, "seq2.txt");
+        std::cout << (uint32_t)it << ", ";
     std::cout << std::endl;
     Utils::writeBer(777, "seq3.txt");
 
     std::cout << "seq 3: " << std::endl;
     for (auto it : res.symb3)
-        Utils::writeBer(it, "seq3.txt");
+        // Utils::writeBer(it, "seq3.txt");
 
-    // std::cout << (uint32_t)it << ", ";
+    std::cout << (uint32_t)it << ", ";
     std::cout << std::endl;
     Utils::writeBer(777, "seq4.txt");
 
     std::cout << "seq 4: " << std::endl;
     for (auto it : res.symb4)
-        Utils::writeBer(it, "seq4.txt");
-        // std::cout << (uint32_t)it << ", ";
+        // Utils::writeBer(it, "seq4.txt");
+        std::cout << (uint32_t)it << ", ";
     std::cout << std::endl;
 
 
